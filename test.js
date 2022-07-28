@@ -18,7 +18,6 @@ async function run() {
   for (const pedido of pedidosfiltrados) {
     pedido && (await createPedido({ pedido }));
   }
-//AÑADIR DETALLE DEL PEDIDO
 
 }
 
