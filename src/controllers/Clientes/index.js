@@ -9,17 +9,8 @@ exports.buscarCliente = async function (codigo) {
   return data;
 };
 
-exports.createClient = async function (codigo, companyId) {
+exports.createClient = async function ({ persona }) {
   try {
-    const clientews = await getCliente(codigo, companyId);
-    //console.log(clientews)
-
-    if (clientews === undefined || clientews.length === 0) {
-      return;
-    }
-    const client = clientews;
-    //console.log(client);
-
     const clientaxu = await oracledb.busqueda(
       `SELECT * FROM VEN_MAECLIENTE WHERE ROWNUM=1`
     );
@@ -40,27 +31,27 @@ exports.createClient = async function (codigo, companyId) {
     :BANCLI_CODIGO,:CLI_NROCUENTA)`;
 
     const binds = [
-      client.identification,
-      clientaxu[0].GRU_CODIGO,
-      clientaxu[0].VEN_CODIGO,
-      client.socialReason.slice(0, 199),
-      client.socialReason.slice(0, 199),
-      getCodeidentificaicon(client?.identification),
-      client.identification,
-      client?.address?.slice(0, 99),
-      client.phone.slice(0, 14),
-      client.email,
+      persona.ruc ?? persona.cedula,
+      persona.categoria_nombre ?? clientaxu[0].GRU_CODIGO,
+      persona.vendedor ?? clientaxu[0].VEN_CODIGO,
+      persona.razon_social.slice(0, 199),
+      persona.nombre_comercial.slice(0, 199),
+      getCodeidentificaicon(persona.ruc ?? persona.cedula),
+      persona.ruc ?? persona.cedula,
+      persona?.direccion?.slice(0, 99),
+      persona.telefonos.slice(0, 14),
+      persona.email,
       null, //client.CLI_CONTACTO,
       new Date(),
       clientaxu[0].CLI_LIMCREDIT,
       clientaxu[0].CLI_DIACREDIT,
-      0,//client.CLI_PORCEDESCUENTO,
+      0, //client.CLI_PORCEDESCUENTO,
       clientaxu[0].CLI_IVA,
       clientaxu[0].CLI_CONTRIBUYENTE,
       clientaxu[0].CON_CODIGO1,
       clientaxu[0].CON_CODIGO2,
       clientaxu[0].CLI_ZONA,
-      `Creado desde el Web Services`,
+      persona.id ?? `Creado desde el Web Services`,
       clientaxu[0].NOM_CODIGO,
       clientaxu[0].DEP_CODIGO,
       clientaxu[0].CLI_TIPO,

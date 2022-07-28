@@ -48,24 +48,20 @@ exports.filterPedidos = async function (data) {
   }
 };
 
-const createPedido = async function ({ pedido, ordersById, detailsByHeadId }) {
+const createPedido = async function ({ pedido }) {
   //verificar que el cliente este creado
   //insertar el encabezado del pedido
   //verificar el detalle del pedido que el articulo este insertado
   //insertar el detalle del pedido
   //console.log(ordersById[pedido.id].clientIdentification);
-  const cliente = await buscarCliente(
-    ordersById[pedido.id].clientIdentification
-  );
+  const { persona } = pedido;
+  const cliente = await buscarCliente(persona.ruc ?? persona.cedula);
   //console.log(cliente);
   //si es null se crea un nuevo cliente
   if (cliente == null) {
-    await createClient(
-      ordersById[pedido.id].clientId,
-      ordersById[pedido.id].companyId
-    );
+    await createClient({ persona });
   }
-  await insertEncPedido(pedido, ordersById);
+  await insertEncPedido({ pedido });
   //insertar el encabezado del pedido
 };
 const createDetallePedido = async function ({
@@ -146,7 +142,7 @@ const addDetPed = async function (ENCPED_NUMERO, ENCPED_REFERENCIA) {
   }
 };
 
-const insertEncPedido = async function (pedido, ordersById) {
+const insertEncPedido = async function ({ pedido }) {
   try {
     //traer la informacion del primer vendedor
     const vendedoraux = await oracledb.busqueda(
@@ -159,7 +155,7 @@ const insertEncPedido = async function (pedido, ordersById) {
     const orderAux = await oracledb.busqueda(
       `SELECT * FROM ven_encped WHERE ROWNUM=1`
     );
-    const order = ordersById[pedido.id];
+    const order = pedido;
     const ENCPED_NUMERO = "PE" + pedido.num.toString().padStart(11, "0");
 
     const sql = `INSERT INTO VEN_ENCPED (ENCPED_numero, COM_codigo, CLI_codigo, VEN_codigo,
