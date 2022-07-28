@@ -29,20 +29,16 @@ const getPedidosNoDet = async function () {
   }
 };
 
-exports.filterPedidos = async function ({ ordersIds, ordersById }) {
+exports.filterPedidos = async function (data) {
   try {
     let numero = await getMaxNumPedido();
     //console.log(numero);
     numero++;
     const pedidosoracle = await buscarPedidos();
-    const nextPedidos = ordersIds.map((p) => {
-      const aux = pedidosoracle.find(
-        (po) =>
-          po.ENCPED_REFERENCIA ===
-          `${ordersById[p].serie}-${ordersById[p].sequential}`
-      )
+    const nextPedidos = data.map((p) => {
+      const aux = pedidosoracle.find((po) => po.ENCPED_REFERENCIA === p.id)
         ? false
-        : { id: p, num: numero++ };
+        : { ...p, num: numero++ };
       return aux;
     });
     return nextPedidos;
