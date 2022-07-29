@@ -29,15 +29,15 @@ exports.createClient = async function ({ persona }) {
     :CLI_PORCEDESCUENTO,:CLI_VALORRECARGO,:CLI_PORCERECARGO,:CEN_CODIGO,:CLI_LOCAL,:CLI_FECHANACIMIENTO,
     :CLI_SEXO,:CLI_CARGO,:CLI_DIACHPOS,:CLI_UNIFICA,:CLI_EXCLUYE,:CLI_DESCUENTOLIM,:CON_CODIGO3,:COM_CODIGO,
     :BANCLI_CODIGO,:CLI_NROCUENTA)`;
-
+    const identification = persona.ruc ?? persona.cedula;
     const binds = [
-      persona.ruc ?? persona.cedula,
+      identification,
       persona.categoria_nombre ?? clientaxu[0].GRU_CODIGO,
       persona.vendedor ?? clientaxu[0].VEN_CODIGO,
       persona.razon_social.slice(0, 199),
       persona.nombre_comercial.slice(0, 199),
-      getCodeidentificaicon(persona.ruc ?? persona.cedula),
-      persona.ruc ?? persona.cedula,
+      getCodeidentificaicon(identification),
+      identification,
       persona?.direccion?.slice(0, 99),
       persona.telefonos.slice(0, 14),
       persona.email,
@@ -81,17 +81,17 @@ exports.createClient = async function ({ persona }) {
       clientaxu[0].BANCLI_CODIGO,
       clientaxu[0].CLI_NROCUENTA,
     ];
-    // console.log(binds);
+    console.log(binds);
     //insertar en la base de datos
 
     const resp = await oracledb.ejecutarSQL(sql, binds);
-    //console.log(resp);
+    console.log(resp);
     logger.info(
-      `Cliente creado con codigo: ${client.identification} y ID: ${client._id}`
+      `Cliente creado con codigo: ${identification} y ID: ${persona.id}`
     );
     return true;
   } catch (error) {
-    //console.log(error);
+    console.log(error);
     logger.error(error);
     return false;
   }

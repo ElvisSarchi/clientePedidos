@@ -2,20 +2,16 @@ const oracledb = require("../../services/dboracle");
 const { getArticulo } = require("../../services/ws");
 const moment = require("moment");
 const log4js = require("log4js");
+const wsConfitico = require("../../services/wsConfitico");
 
 const logger = log4js.getLogger();
 
-const createArticulo = async function ({ id }) {
+const createArticulo = async function ({ code }) {
   try {
-    const articulows = await getArticulo({ id });
-
-    if (articulows === null) {
-      return;
-    }
-
-    const { data: articulo } = articulows;
-    console.log(articulo);
-    if (articulo === undefined) return;
+    const articulo = await wsConfitico.fetchGet({
+      path: `producto/${code}`,
+    });
+    //console.log(articulo);
     //verificar si existe el grupo caso contraro se inserta
     //await verificarGrupo(articulo.GRUP_CODIGO, articulo.GRUP_NOMBRE);
 
@@ -57,14 +53,14 @@ const createArticulo = async function ({ id }) {
         ,:ART_CODSRIICE,:ART_DENSIDAD,:ART_CANTIDAD_UND,:ART_TIPOCATEGORIA,:ART_COMENTARIO)`;
 
     const binds = [
-      articulo.mainCode, //ART_CODIGO,
+      articulo.codigo, //ART_CODIGO,
       articuloAux.COM_CODIGO, //COM_CODIGO,
-      articulo.name.slice(0, 99), //ART_NOMBRE,
-      articulo.name.slice(0, 24), //ART_NOMBREC,
+      articulo.nombre.slice(0, 99), //ART_NOMBRE,
+      articulo.nombre.slice(0, 24), //ART_NOMBREC,
       articuloAux.GRUP_CODIGO, //GRUP_CODIGO,
       null, //GRUP_CODIGOP,
-      articulo.iva.porcentage === 0 ? `N` : `S`, //articulo.ART_TRIBUTAIVA, //ART_TRIBUTAIVA,
-      articulo.ice.porcentage ===0 ? `N` : `S`, //"N", //ART_TRIBUTAICE,
+      articulo.porcentaje_iva === 0 ? `N` : `S`, //articulo.ART_TRIBUTAIVA, //ART_TRIBUTAIVA,
+      `N`, //"N", //ART_TRIBUTAICE,
       moment().format(`DD/MM/YYYY`), //ART_FECHAING,
       null, //ART_LABORATORIO,
       null, //ART_UBICACION,
@@ -72,7 +68,7 @@ const createArticulo = async function ({ id }) {
       articuloAux.ART_UNIDADVENTA, //ART_UNIDADVENTA,
       articuloAux.ART_UNIDADCOSTEO, //ART_UNIDADCOSTEO,
       articuloAux.ART_CADUCA, //ART_CADUCA
-      null, //ART_CODIGOALT1,
+      articulo.id, //ART_CODIGOALT1,
       null, //ART_CODIGOALT2,
       null, //ART_CODIGOALT3,
       null, //ART_CODIGOALT4,
@@ -128,13 +124,13 @@ const createArticulo = async function ({ id }) {
       null, //ART_TIPOCATEGORIA,
       null, //ART_COMENTARIO,
     ];
-    console.log(binds);
+    //console.log(binds);
     //insertar en la base de datos
 
     const resp = await oracledb.ejecutarSQL(sql, binds);
-    logger.info(`Articulo insertado con codigo: ${articulo.mainCode}`);
+    logger.info(`Articulo insertado con codigo: ${articulo.codigo}`);
     // console.log(resp);
-    return true;
+    return articulo.codigo;
   } catch (error) {
     //console.log(error);
     logger.error(error);

@@ -12,7 +12,6 @@ const axiosInstance = axios.create({
 
 exports.fetchGet = async function ({ path, ...params }) {
   try {
-    console.log(`start`);
     const { data } = await axiosInstance.get(path, {
       params: {
         ...params,

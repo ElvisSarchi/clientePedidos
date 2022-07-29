@@ -1,5 +1,6 @@
 const oracledb = require("../../services/dboracle");
 const log4js = require("log4js");
+const moment = require("moment");
 
 const logger = log4js.getLogger();
 
@@ -102,15 +103,16 @@ const createOrderDetail = async function ({
     }
   }
 };
-const findArticulo = async function ({ code, id }) {
-  const sqlbusqueda = `select ART_CODIGO from inv_maearticulo where ART_CODIGO='${code}'`;
+const findArticulo = async function ({ code }) {
+  const sqlbusqueda = `select ART_CODIGO from inv_maearticulo where ART_CODIGOALT1='${code}'`;
   try {
-    const verificar = await oracledb.busqueda(sqlbusqueda);
-    console.log(verificar);
-    if (verificar === null) {
-      await createArticulo({ id });
+    const inv_maearticulo = await oracledb.busqueda(sqlbusqueda);
+    //console.log(inv_maearticulo);
+    if (inv_maearticulo === null) {
+      const artcodigo = await createArticulo({ code });
+      return artcodigo;
     }
-    return true;
+    return inv_maearticulo[0].ART_CODIGO;
   } catch (error) {
     return false;
   }
@@ -172,34 +174,50 @@ const insertEncPedido = async function ({ pedido }) {
     ,:ENCPED_BASEICE,:ENCPED_BASECERO,:ENCPED_GRUPO,:ENCPED_REFERENCIA
     ,:ENCPED_FECHAVALIDEZ,:BOD_CODIGO,:ENCPED_TIPO,:ENCPED_TIPODSCTO,:ENCPED_REFCLI,:USUIDENTIFICACION)`;
 
+    const { persona, detalles } = pedido;
+    const identification = persona.ruc ?? persona.cedula;
+    //obtener total descuento de los detalles
+    const totalDescuento = detalles.reduce(
+      (total, detalle) => total + detalle.precio - detalle.base_cero,
+      0
+    );
     const binds = [
       ENCPED_NUMERO, //ENCPED_numero,
       "01", //COM_codigo,
-      order.clientIdentification, //CLI_codigo,
+      identification, //CLI_codigo,
       vendedoraux[0].VEN_CODIGO, //VEN_codigo,
-      new Date(order.emissionDate), //ENCPED_fechaemision,
-      new Date(order.deliveryDate), //ENCPED_fechaentrega,
+      new Date(
+        moment(order.fecha_emision, "DD/MM/YYYY").format(
+          "YYYY-MM-DD[T]HH:mm:ss"
+        )
+      ), //ENCPED_fechaemision,
+      new Date(
+        moment(order.fecha_vencimiento, "DD/MM/YYYY").format(
+          "YYYY-MM-DD[T]HH:mm:ss"
+        )
+      ), //ENCPED_fechaentrega,
       1, //pedido.ENCPED_IVA, //ENCPED_iva,
-      "P", //pedido.ENCPED_ESTADO, //ENCPED_estado,
+      order.estado ?? "P", //pedido.ENCPED_ESTADO, //ENCPED_estado,
       null, //ENCPED_orden,
       orderAux[0].ENCPED_LISTA ?? "A", //pedido.ENCPED_LISTA, //ENCPED_lista,
-      order.observation.slice(0, process.env.SIZE_OBSERVACION ?? 99), //ENCPED_observacion,
+      order.descripcion.slice(0, process.env.SIZE_OBSERVACION ?? 99), //ENCPED_observacion,
       Number(order.total), //ENCPED_total,
-      Number(order.subTotalWithoutTaxes + order.totalDiscount), //ENCPED_totalneto,
-      Number(order.totalDiscount), //ENCPED_valordes,
-      getPorDescuento({
-        totalNeto: order.subTotalWithoutTaxes + order.totalDiscount,
-        totalDescuento: order.totalDiscount,
-      }), //Number(pedido.ENCPED_PORCEDES), // ENCPED_porcedes,
-      Number(order.subTotalIva), //ENCPED_valoriva,
+      Number(order.total - order.iva - order.ice), //ENCPED_totalneto,
+      0, //Number(totalDescuento), //ENCPED_valordes,
+      /* getPorDescuento({
+        totalNeto: order.subtotal_0,
+        totalDescuento,
+      }), */ //Number(pedido.ENCPED_PORCEDES), // ENCPED_porcedes,
+      0, // ENCPED_porcedes,
+      Number(order.iva), //ENCPED_valoriva,
       orderAux[0].ENCPED_PORCEIVA, //Number(pedido.ENCPED_PORCEIVA), //ENCPED_porceiva,
-      Number(order.iceValue), //ENCPED_valorice,
+      Number(order.ice), //ENCPED_valorice,
       orderAux[0].ENCPED_PORCEICE, //Number(pedido.ENCPED_PORCEICE), //ENCPED_porceice,
-      Number(order.subTotalIva), //ENCPED_baseiva,
+      Number(order.subtotal_12), //ENCPED_baseiva,
       0, //Number(pedido.ENCPED_BASEICE), //ENCPED_baseice,
-      Number(order.subTotalZeroIva), //ENCPED_basecero,
+      Number(order.subtotal_0), //ENCPED_basecero,
       null, //ENCPED_grupo,
-      `${order.serie}-${order.sequential}`, //order._id, //ENCPED_referencia,
+      order.id, //order._id, //ENCPED_referencia,
       getfechaexpiracion(), //ENCPED_fechavalidez,
       bodegaaux[0].BOD_CODIGO, //BOD_codigo,
       null, //ENCPED_tipo,
@@ -207,15 +225,26 @@ const insertEncPedido = async function ({ pedido }) {
       null, //ENCPED_refcli,
       "admin", //USUIDENTIFICACION
     ];
-    //console.log(binds);
+    console.log(binds);
     const resp = await oracledb.ejecutarSQL(sql, binds);
     logger.info(
-      `Encabezado insertado con el codigo: ${ENCPED_NUMERO} y referencia: ${order._id}`
+      `Encabezado insertado con el codigo: ${ENCPED_NUMERO} y referencia: ${order.id}`
     );
-    // console.log(resp);
+    console.log(resp);
     //insertar el detalle del pedido
+    //se busca el articulo si no existe se lo crea
+    let linea = 1;
+    for (const detalle of detalles) {
+      const code = await findArticulo({
+        code: detalle.producto_id,
+      });
+      detalle.code = code;
+      console.log(detalle);
+      await insertarDetallePedido({ detalle, linea, ENCPED_NUMERO });
+      linea++;
+    }
   } catch (error) {
-    //console.log(error);
+    console.log(error);
     logger.error(error);
     return false;
   }
@@ -239,7 +268,11 @@ const getfechaexpiracion = function () {
   return c;
 };
 
-const insertarDetallePedido = async function ({ detalle, num, linea }) {
+const insertarDetallePedido = async function ({
+  detalle,
+  linea,
+  ENCPED_NUMERO,
+}) {
   try {
     const bodegaaux = await oracledb.busqueda(
       `SELECT BOD_CODIGO FROM INV_MAEBODEGA WHERE ROWNUM=1`
@@ -247,7 +280,7 @@ const insertarDetallePedido = async function ({ detalle, num, linea }) {
     const detalleaux = await oracledb.busqueda(
       `SELECT * FROM ven_detped WHERE ROWNUM=1`
     );
-    const ENCPED_NUMERO = "PE" + num.toString().padStart(11, "0");
+    //const ENCPED_NUMERO = "PE" + num.toString().padStart(11, "0");
     const sql = `INSERT INTO VEN_DETPED(ENCPED_NUMERO, COM_CODIGO, DETPED_LINEA, DETPED_TIPODET, DETPED_CODIGO,
             DETPED_DESCRIPCION, DETPED_TRIBIVA, DETPED_TRIBICE, DETPED_UNIDAD, DETPED_CANTIDAD,
             DETPED_DESPACHO, DETPED_PRECIO, DETPED_DESCUENTO, DETPED_TOTAL,DETPED_IVA, DETPED_ICE,
@@ -263,33 +296,47 @@ const insertarDetallePedido = async function ({ detalle, num, linea }) {
             ,:MAEPROVTA_CODIGO,:DETPED_CANTIDADUND,:DETPED_LOTE
             ,:DETPED_CARACTERISTICAS)`;
 
-    const BASEIVA =
-      detalle.ivaRate === 0 ? 0 : (detalle.ivaValue / detalle.ivaRate) * 100;
+    const iva =
+      (Number(detalle.base_gravable) * Number(detalle.porcentaje_iva)) / 100;
+    const ice =
+      (Number(detalle.base_gravable) * Number(detalle.porcentaje_ice ?? 0)) /
+      100;
+    const descuento =
+      (Number(detalle.cantidad) *
+        Number(detalle.precio) *
+        Number(detalle.porcentaje_descuento)) /
+      100;
+    const total =
+      Number(detalle.cantidad) * Number(detalle.precio) - Number(descuento);
+    const BASEIVA = Number(detalle.base_gravable);
 
-    const BASEICE =
-      detalle.iceRate === 0 ? 0 : (detalle.iceValue / detalle.iceRate) * 100;
+    const BASEICE = Number(
+      Number(detalle.porcentaje_ice ?? 0) != 0 ? detalle.base_gravable : 0
+    );
     const binds = [
       ENCPED_NUMERO, //ENCPED_NUMERO
       `01`, //COM_CODIGO,
       linea, //detalle.DETPED_LINEA, //DETPED_LINEA
       `A`, //detalle.DETPED_TIPODET, //DETPED_TIPODET
-      detalle.productServiceCode,
-      detalle.productServiceDescription.slice(0, 79),
-      detalle.ivaValue === 0 ? `N` : `S`, //detalle.DETPED_TRIBIVA,
-      detalle.iceValue === 0 ? `N` : `S`, //detalle.DETPED_TRIBICE,
+      detalle.code,
+      detalle.producto_nombre.slice(0, 79),
+      detalle.porcentaje_iva === 0 ? `N` : `S`, //detalle.DETPED_TRIBIVA,
+      Number(detalle.porcentaje_ice) === 0 ? `N` : `S`, //detalle.DETPED_TRIBICE,
       detalleaux ? detalleaux[0].DETPED_UNIDAD : `UND.`, //detalle.DETPED_UNIDAD,
-      Number(detalle.quantity),
+      Number(detalle.cantidad),
       Number(0), //despacho
-      Number(detalle.unitPrice),
-      Number((detalle.discount * 100) / (detalle.unitPrice * detalle.quantity)), //descuento
-      Number(detalle.totalValue),
-      Number(detalle.ivaValue ?? 0),
-      Number(detalle.iceValue ?? 0),
+      Number(detalle.precio),
+      Number(detalle.porcentaje_descuento), //descuento
+      Number(total),
+      Number(iva),
+      Number(ice),
       detalleaux ? detalleaux[0].DETPED_LISTA : `A`, //detalle.DETPED_LISTA,
       BASEIVA, //Number(detalle.ivaValue), baseIVA
       BASEICE, //Number(detalle.DETPED_BASEICE),
-      detalle.totalValue - BASEIVA - BASEICE, //Number(detalle.DETPED_BASECERO),
-      Number(detalle.iceRate),
+      Number(detalle.base_cero), //Number(detalle.DETPED_BASECERO),
+      Number(
+        detalle.porcentaje_ice ? Number(detalle.porcentaje_ice) / 10000 : 0
+      ), //Number(detalle.DETPED_PORCEICE),
       0, //DETPED_ORDEN,
       0, //DETPED_NUMBLO,
       bodegaaux[0].BOD_CODIGO,
@@ -300,14 +347,14 @@ const insertarDetallePedido = async function ({ detalle, num, linea }) {
       null, //DETPED_LOTE,
       null, //DETPED_CARACTERISTICAS,
     ];
-    //console.log(binds);
+    console.log(binds);
     const resp = await oracledb.ejecutarSQL(sql, binds);
     logger.info(
       `Detalle insertado con el codigo: ${ENCPED_NUMERO} y linea: ${linea}`
     );
-    // console.log(resp);
+    console.log(resp);
   } catch (error) {
-    //console.log(error);
+    console.log(error);
     logger.error(error);
     return;
   }
